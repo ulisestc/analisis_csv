@@ -1,5 +1,6 @@
 Flask
 pandas
+numpy
 matplotlib
 seaborn
 gunicorn

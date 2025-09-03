@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analizador de Calidad de Datos CSV</title>
-    <!-- Incluimos Tailwind CSS para un diseño moderno -->
+    <title>Analizador de Datos Genérico CSV</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Estilos adicionales para mejorar la apariencia */
         .table { width: 100%; }
         .table th, .table td { padding: 0.75rem; vertical-align: top; border-top: 1px solid #dee2e6; }
         .table thead th { vertical-align: bottom; border-bottom: 2px solid #dee2e6; background-color: #f8f9fa; }
@@ -20,22 +18,25 @@
             border-left-color: #09f;
             animation: spin 1s ease infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Add smooth transition for result cards */
+        .result-card {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.5s ease-out forwards;
         }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-gray-100 font-sans leading-normal tracking-normal">
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-800">Analizador de Calidad de Datos</h1>
-            <p class="text-gray-600 mt-2">Sube un archivo .csv para obtener un reporte instantáneo y decidir cómo limpiarlo.</p>
+            <h1 class="text-4xl font-bold text-gray-800">Analizador Exploratorio de Datos (EDA)</h1>
+            <p class="text-gray-600 mt-2">Sube un archivo .csv y obtén un análisis visual instantáneo.</p>
         </header>
 
-        <!-- Formulario de carga de archivos -->
-        <div class="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl mx-auto">
             <form id="upload-form" class="space-y-4">
                 <div>
                     <label for="file-input" class="block text-sm font-medium text-gray-700">Selecciona tu dataset (.csv)</label>
@@ -52,9 +53,7 @@
             </form>
         </div>
 
-        <!-- Sección de Resultados -->
-        <div id="results" class="mt-10 max-w-5xl mx-auto hidden">
-            <!-- Spinner de carga -->
+        <div id="results" class="mt-10 max-w-6xl mx-auto hidden">
             <div id="loader" class="flex justify-center items-center my-8 hidden">
                 <div class="spinner"></div>
                 <p class="ml-4 text-gray-700">Analizando tu dataset, por favor espera...</p>
@@ -65,7 +64,6 @@
                 <span class="block sm:inline" id="error-text"></span>
             </div>
 
-            <!-- Contenido de resultados -->
             <div id="results-content" class="space-y-8"></div>
         </div>
     </div>
@@ -87,7 +85,6 @@
                 return;
             }
 
-            // Mostrar el spinner y ocultar resultados anteriores
             resultsDiv.classList.remove('hidden');
             loader.classList.remove('hidden');
             resultsContent.innerHTML = '';
@@ -101,87 +98,62 @@
                     method: 'POST',
                     body: formData
                 });
-
                 const data = await response.json();
 
                 if (data.error) {
                     throw new Error(data.error);
                 }
-
-                // Si todo sale bien, construimos el HTML con los resultados
-                let contentHTML = `
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Resumen General: <span class="text-blue-600">${data.nombre_archivo}</span></h2>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                            <div class="bg-gray-50 p-4 rounded-lg">
-                                <p class="text-gray-600 text-sm font-medium">Filas</p>
-                                <p class="text-2xl font-bold text-gray-900">${data.num_filas.toLocaleString('es-MX')}</p>
-                            </div>
-                            <div class="bg-gray-50 p-4 rounded-lg">
-                                <p class="text-gray-600 text-sm font-medium">Columnas</p>
-                                <p class="text-2xl font-bold text-gray-900">${data.num_columnas.toLocaleString('es-MX')}</p>
-                            </div>
-                            <div class="bg-gray-50 p-4 rounded-lg">
-                                <p class="text-gray-600 text-sm font-medium">Filas Duplicadas</p>
-                                <p class="text-2xl font-bold ${data.num_duplicados > 0 ? 'text-red-600' : 'text-green-600'}">${data.num_duplicados.toLocaleString('es-MX')}</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
                 
-                // Gráfica de nulos
-                if(data.grafica_nulos) {
-                    contentHTML += `
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h2 class="text-2xl font-bold text-gray-800 mb-4">Visualización de Datos Nulos</h2>
-                            <p class="text-gray-600 mb-4">Esta gráfica muestra las columnas que contienen valores faltantes. Son las primeras que deberías investigar.</p>
-                            <img src="${data.grafica_nulos}" alt="Gráfica de valores nulos" class="mx-auto"/>
+                // Función para crear tarjetas de resultados
+                const createCard = (title, content, description = '') => {
+                    const descHtml = description ? `<p class="text-gray-600 mb-4">${description}</p>` : '';
+                    return `
+                        <div class="bg-white p-6 rounded-lg shadow-md result-card">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-4">${title}</h2>
+                            ${descHtml}
+                            <div class="overflow-x-auto">${content}</div>
                         </div>
                     `;
-                } else {
-                     contentHTML += `
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h2 class="text-2xl font-bold text-gray-800 mb-4">Visualización de Datos Nulos</h2>
-                            <p class="text-green-600 font-semibold">¡Felicidades! No se encontraron valores nulos en tu dataset.</p>
-                        </div>
-                    `;
-                }
+                };
 
-                // Información de Columnas
-                contentHTML += `
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Tipos de Datos y Nulos por Columna</h2>
-                        <pre class="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto"><code>${data.info_columnas}</code></pre>
-                    </div>
-                `;
+                // Función para crear tarjetas de imágenes
+                const createImageCard = (title, description, imgSrc) => {
+                    if (!imgSrc) return '';
+                    return createCard(title, `<img src="${imgSrc}" alt="${title}" class="mx-auto"/>`, description);
+                };
 
-                // Estadísticas Numéricas
-                contentHTML += `
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Estadísticas de Columnas Numéricas</h2>
-                        <div class="overflow-x-auto">${data.desc_numericas}</div>
-                    </div>
-                `;
+                let contentHTML = '';
 
-                // Estadísticas Categóricas
-                contentHTML += `
-                    <div class="bg-white p-6 rounded-lg shadow-md">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Estadísticas de Columnas Categóricas</h2>
-                        <div class="overflow-x-auto">${data.desc_categoricas}</div>
-                    </div>
-                `;
+                // Resumen General
+                const summaryContent = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-gray-600 text-sm font-medium">Filas</p><p class="text-2xl font-bold text-gray-900">${data.num_filas.toLocaleString()}</p></div>
+                        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-gray-600 text-sm font-medium">Columnas</p><p class="text-2xl font-bold text-gray-900">${data.num_columnas.toLocaleString()}</p></div>
+                        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-gray-600 text-sm font-medium">Duplicados</p><p class="text-2xl font-bold ${data.num_duplicados > 0 ? 'text-red-600' : 'text-green-600'}">${data.num_duplicados.toLocaleString()}</p></div>
+                    </div>`;
+                contentHTML += createCard(`Resumen General: <span class="text-blue-600">${data.nombre_archivo}</span>`, summaryContent);
+
+                // Gráficas
+                contentHTML += createImageCard('Mapa de Calor de Nulos', 'Visualiza patrones de datos faltantes. Las áreas claras indican datos presentes; las oscuras, datos nulos.', data.graficas.null_heatmap);
+                contentHTML += createImageCard('Mapa de Calor de Correlación', 'Muestra la relación entre variables numéricas. Los colores cálidos (rojos) indican correlación positiva; los fríos (azules), negativa.', data.graficas.correlation_heatmap);
+                contentHTML += createImageCard('Distribución de Variables Numéricas', 'Histogramas que muestran cómo se distribuyen los valores de cada columna numérica.', data.graficas.numeric_distributions);
+                contentHTML += createImageCard('Frecuencia de Variables Categóricas', 'Gráficos de barras que muestran el conteo de cada categoría en las columnas de texto.', data.graficas.categorical_distributions);
+                
+                // Información de Columnas y Estadísticas
+                contentHTML += createCard('Tipos de Datos y Nulos por Columna', `<pre class="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto"><code>${data.info_columnas}</code></pre>`);
+                contentHTML += createCard('Estadísticas Descriptivas (Numéricas)', data.desc_numericas);
+                contentHTML += createCard('Estadísticas Descriptivas (Categóricas)', data.desc_categoricas);
 
                 resultsContent.innerHTML = contentHTML;
 
             } catch (err) {
-                // Mostrar mensaje de error
                 errorText.textContent = err.message;
                 errorMessage.classList.remove('hidden');
             } finally {
-                // Ocultar el spinner
                 loader.classList.add('hidden');
             }
         });
     </script>
 </body>
 </html>
+
