@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Calidad de Datos CSV</title>
+    <!-- Incluimos Tailwind CSS para un diseño moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos adicionales para mejorar la apariencia */
+        .table { width: 100%; }
+        .table th, .table td { padding: 0.75rem; vertical-align: top; border-top: 1px solid #dee2e6; }
+        .table thead th { vertical-align: bottom; border-bottom: 2px solid #dee2e6; background-color: #f8f9fa; }
+        .table-striped tbody tr:nth-of-type(odd) { background-color: rgba(0, 0, 0, 0.05); }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans leading-normal tracking-normal">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Analizador de Calidad de Datos</h1>
+            <p class="text-gray-600 mt-2">Sube un archivo .csv para obtener un reporte instantáneo y decidir cómo limpiarlo.</p>
+        </header>
+
+        <!-- Formulario de carga de archivos -->
+        <div class="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
+            <form id="upload-form" class="space-y-4">
+                <div>
+                    <label for="file-input" class="block text-sm font-medium text-gray-700">Selecciona tu dataset (.csv)</label>
+                    <input type="file" id="file-input" name="file" accept=".csv" class="mt-1 block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300">
+                    Analizar Archivo
+                </button>
+            </form>
+        </div>
+
+        <!-- Sección de Resultados -->
+        <div id="results" class="mt-10 max-w-5xl mx-auto hidden">
+            <!-- Spinner de carga -->
+            <div id="loader" class="flex justify-center items-center my-8 hidden">
+                <div class="spinner"></div>
+                <p class="ml-4 text-gray-700">Analizando tu dataset, por favor espera...</p>
+            </div>
+            
+            <div id="error-message" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative hidden" role="alert">
+                <strong class="font-bold">¡Error!</strong>
+                <span class="block sm:inline" id="error-text"></span>
+            </div>
+
+            <!-- Contenido de resultados -->
+            <div id="results-content" class="space-y-8"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            const resultsDiv = document.getElementById('results');
+            const loader = document.getElementById('loader');
+            const resultsContent = document.getElementById('results-content');
+            const errorMessage = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+
+            if (!file) {
+                alert('Por favor, selecciona un archivo.');
+                return;
+            }
+
+            // Mostrar el spinner y ocultar resultados anteriores
+            resultsDiv.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            resultsContent.innerHTML = '';
+            errorMessage.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                // Si todo sale bien, construimos el HTML con los resultados
+                let contentHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Resumen General: <span class="text-blue-600">${data.nombre_archivo}</span></h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-gray-600 text-sm font-medium">Filas</p>
+                                <p class="text-2xl font-bold text-gray-900">${data.num_filas.toLocaleString('es-MX')}</p>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-gray-600 text-sm font-medium">Columnas</p>
+                                <p class="text-2xl font-bold text-gray-900">${data.num_columnas.toLocaleString('es-MX')}</p>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-gray-600 text-sm font-medium">Filas Duplicadas</p>
+                                <p class="text-2xl font-bold ${data.num_duplicados > 0 ? 'text-red-600' : 'text-green-600'}">${data.num_duplicados.toLocaleString('es-MX')}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Gráfica de nulos
+                if(data.grafica_nulos) {
+                    contentHTML += `
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-4">Visualización de Datos Nulos</h2>
+                            <p class="text-gray-600 mb-4">Esta gráfica muestra las columnas que contienen valores faltantes. Son las primeras que deberías investigar.</p>
+                            <img src="${data.grafica_nulos}" alt="Gráfica de valores nulos" class="mx-auto"/>
+                        </div>
+                    `;
+                } else {
+                     contentHTML += `
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-4">Visualización de Datos Nulos</h2>
+                            <p class="text-green-600 font-semibold">¡Felicidades! No se encontraron valores nulos en tu dataset.</p>
+                        </div>
+                    `;
+                }
+
+                // Información de Columnas
+                contentHTML += `
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Tipos de Datos y Nulos por Columna</h2>
+                        <pre class="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto"><code>${data.info_columnas}</code></pre>
+                    </div>
+                `;
+
+                // Estadísticas Numéricas
+                contentHTML += `
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Estadísticas de Columnas Numéricas</h2>
+                        <div class="overflow-x-auto">${data.desc_numericas}</div>
+                    </div>
+                `;
+
+                // Estadísticas Categóricas
+                contentHTML += `
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">Estadísticas de Columnas Categóricas</h2>
+                        <div class="overflow-x-auto">${data.desc_categoricas}</div>
+                    </div>
+                `;
+
+                resultsContent.innerHTML = contentHTML;
+
+            } catch (err) {
+                // Mostrar mensaje de error
+                errorText.textContent = err.message;
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // Ocultar el spinner
+                loader.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
